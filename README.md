@@ -26,7 +26,7 @@ Destinée aux techniciens et ingénieurs avant-vente Wildix pour créer, configu
 | Backend   | Hono (Node.js/TypeScript)                      |
 | Auth + DB | PocketBase 0.38                                |
 | LLM local | Ollama (`qwen2.5:3b` par défaut)               |
-| LLM cloud | OpenAI (`gpt-4o-mini`) ou Groq (`llama-3.1-8b-instant`) |
+| LLM cloud | OpenAI, Groq, Gemini, Anthropic |
 | Deploy    | Docker Compose + nginx                         |
 
 ---
