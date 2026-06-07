@@ -12,7 +12,7 @@ Destinée aux techniciens et ingénieurs avant-vente Wildix pour créer, configu
 - **VoiceBots WILMA** — Liste, création, édition, clonage intra et inter-PBX
 - **ChatBots X-Bees** — Même interface pour les bots de messagerie
 - **WIM Tools** — Configuration des intégrations webhook appelables par les bots
-- **Génération IA** — Prompt système en 8 sections généré par Ollama (ou OpenAI/Groq)
+- **Génération IA** — Prompt système en 8 sections généré par un LLM local ou CLoud
 - **Wizard de création** — 4 étapes guidées pour créer un bot complet
 - **Interface admin** — Gestion des utilisateurs et rôles
 
