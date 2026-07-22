@@ -700,12 +700,41 @@ ai.post('/chat', async (c) => {
   })
 })
 
-// -- GET /ai/config -- config courante (sans clé) ------------------------------
+// -- GET /ai/config -- config par utilisateur avec fallback global --------------
 
 ai.get('/config', async (c) => {
-  const cfg = await getAiConfig()
+  const user = c.get('user')
   const pb = await getAdminPb()
-  // Sync active key to key_ cache
+
+  // 1. Config personnelle de l'utilisateur
+  const userRecords = await pb.collection('user_ai_config').getFullList({
+    filter: `user = "${user.id}"`,
+  }).catch(() => [] as any[])
+
+  const userActive = userRecords.find((r: any) => !String(r['provider'] ?? '').startsWith('key_'))
+
+  if (userActive) {
+    const userSaved: Record<string, { hasKey: boolean; model: string; ollama_url: string }> = {}
+    for (const rec of userRecords) {
+      const p = String(rec['provider'] ?? '')
+      if (!p.startsWith('key_')) continue
+      userSaved[p.slice(4)] = {
+        hasKey:     !!(rec['api_key'] as string),
+        model:      (rec['model'] as string) || '',
+        ollama_url: (rec['ollama_url'] as string) || '',
+      }
+    }
+    return c.json({
+      provider:       userActive['provider'],
+      model:          userActive['model'] || DEFAULT_MODELS[userActive['provider'] as keyof typeof DEFAULT_MODELS],
+      hasKey:         userActive['provider'] === 'ollama' || !!userActive['api_key'],
+      ollama_url:     userActive['ollama_url'],
+      savedProviders: userSaved,
+    })
+  }
+
+  // 2. Fallback config globale
+  const cfg = await getAiConfig()
   if (cfg.provider !== 'ollama' && cfg.api_key) {
     await upsertKeyRecord(pb, cfg.provider, cfg.api_key, cfg.model, cfg.ollama_url)
   }
@@ -729,16 +758,23 @@ type AiConfigInput = {
 }
 
 ai.put('/config', async (c) => {
+  const user = c.get('user')
   const body = await c.req.json<AiConfigInput>()
   const VALID: AiProvider[] = ['ollama', 'openai', 'gemini', 'anthropic', 'groq']
   if (!VALID.includes(body.provider)) throw new AppError(400, 'Provider invalide')
 
   const pb = await getAdminPb()
 
-  // Get effective key: provided OR from key_ cache
+  // Enregistrements utilisateur existants
+  const userRecords = await pb.collection('user_ai_config').getFullList({
+    filter: `user = "${user.id}"`,
+  }).catch(() => [] as any[])
+
+  // Clé effective : fournie OU depuis le cache key_ de l'utilisateur
   let effectiveKey = body.api_key?.trim() ?? ''
   if (!effectiveKey && body.provider !== 'ollama') {
-    const cached = await getKeyRecord(pb, body.provider)
+    const cacheKey = 'key_' + body.provider
+    const cached = userRecords.find((r: any) => r['provider'] === cacheKey)
     effectiveKey = (cached?.['api_key'] as string) || ''
   }
   if (!effectiveKey && body.provider !== 'ollama') {
@@ -748,26 +784,44 @@ ai.put('/config', async (c) => {
   const effectiveModel     = body.model?.trim() || ''
   const effectiveOllamaUrl = body.ollama_url?.trim() || env.OLLAMA_URL
 
-  // Save key to key_ cache
+  // Sauvegarder dans le cache key_ de l'utilisateur
   if (body.provider !== 'ollama') {
-    await upsertKeyRecord(pb, body.provider, effectiveKey, effectiveModel, effectiveOllamaUrl)
+    const cacheKey = 'key_' + body.provider
+    const cached = userRecords.find((r: any) => r['provider'] === cacheKey)
+    const keyData = { user: user.id, provider: cacheKey, api_key: effectiveKey, model: effectiveModel, ollama_url: effectiveOllamaUrl }
+    if (cached) await pb.collection('user_ai_config').update(cached.id, keyData)
+    else await pb.collection('user_ai_config').create(keyData)
   }
 
-  // Update the single active record
-  const activeRec = await getActiveRecord(pb)
+  // Mettre à jour l'enregistrement actif de l'utilisateur
+  const activeRec = userRecords.find((r: any) => !String(r['provider'] ?? '').startsWith('key_'))
   const data = {
+    user:       user.id,
     provider:   body.provider,
     api_key:    body.provider === 'ollama' ? '' : effectiveKey,
     model:      effectiveModel,
     ollama_url: effectiveOllamaUrl,
   }
   if (activeRec) {
-    await pb.collection('ai_config').update(activeRec.id, data)
+    await pb.collection('user_ai_config').update(activeRec.id, data)
   } else {
-    await pb.collection('ai_config').create(data)
+    await pb.collection('user_ai_config').create(data)
   }
 
-  invalidateAiConfigCache()
+  // Si admin, mettre aussi à jour la config globale (fallback pour nouveaux utilisateurs)
+  if (user.role === 'admin') {
+    const activeGlobal = await getActiveRecord(pb)
+    const globalData = {
+      provider:   body.provider,
+      api_key:    body.provider === 'ollama' ? '' : effectiveKey,
+      model:      effectiveModel,
+      ollama_url: effectiveOllamaUrl,
+    }
+    if (activeGlobal) await pb.collection('ai_config').update(activeGlobal.id, globalData)
+    else await pb.collection('ai_config').create(globalData)
+    invalidateAiConfigCache()
+  }
+
   return c.json({ ok: true })
 })
 

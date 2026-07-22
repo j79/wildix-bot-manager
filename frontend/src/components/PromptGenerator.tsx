@@ -155,7 +155,7 @@ export default function PromptGenerator({ pbxId, botType, onGenerated, onRapport
       <div className="flex flex-col items-center justify-center py-16 gap-4 text-gray-500">
         <Loader2 size={32} className="animate-spin text-blue-500" />
         <p className="text-sm font-medium">Génération du prompt en cours…</p>
-        <p className="text-xs text-gray-400">Le LLM construit les 8 sections de votre prompt</p>
+        <p className="text-xs text-gray-400">Le LLM construit les 6 sections de votre prompt</p>
       </div>
     )
   }

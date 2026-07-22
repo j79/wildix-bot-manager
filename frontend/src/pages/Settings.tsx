@@ -118,7 +118,7 @@ function UserForm({ editing, onClose }: UserFormProps) {
 // ── PBX form modal ────────────────────────────────────────────────────────────
 
 const PBX_EMPTY: Omit<PbxCredential, 'id' | 'user' | 'created' | 'updated'> = {
-  name: '', pbx_host: '', api_token: '', pbx_serial: '', pbx_local_token: '',
+  name: '', pbx_host: '', api_token: '', pbx_serial: '', pbx_local_token: '', shared: false,
 }
 
 function PbxForm({ editing, onClose }: { editing: PbxCredential | null; onClose: () => void }) {
@@ -127,7 +127,7 @@ function PbxForm({ editing, onClose }: { editing: PbxCredential | null; onClose:
   const [form, setForm] = useState(
     editing
       ? { name: editing.name, pbx_host: editing.pbx_host, api_token: editing.api_token,
-          pbx_serial: editing.pbx_serial ?? '', pbx_local_token: editing.pbx_local_token ?? '' }
+          pbx_serial: editing.pbx_serial ?? '', pbx_local_token: editing.pbx_local_token ?? '', shared: editing.shared ?? false }
       : PBX_EMPTY,
   )
   const [apiTest,   setApiTest]   = useState<{ ok: boolean; message: string } | null>(null)
@@ -536,6 +536,12 @@ export default function Settings() {
     onError: (e: Error) => toast.error(e.message),
   })
 
+  const tplResetMut = useMutation({
+    mutationFn: (id: string) => templatesApi.resetOverride(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['templates'] }); toast.success('Template réinitialisé') },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   const { data: pbxList = [], isLoading: pbxLoading, isError: pbxError, refetch: refetchPbx } = useQuery({
     queryKey: ['pbx'],
     queryFn: pbxApi.list,
@@ -640,9 +646,11 @@ export default function Settings() {
             <LayoutGrid size={16} className="text-muted-foreground" />
             <p className="text-sm font-semibold">Templates de création assistée</p>
           </div>
-<Button size="sm" onClick={() => { setTplEditing(null); setTplOpen(true) }}>
+{isAdmin && (
+            <Button size="sm" onClick={() => { setTplEditing(null); setTplOpen(true) }}>
               <Plus size={14} /> Nouveau template
             </Button>
+          )}
         </div>
 
         {tplLoading && <p className="text-sm text-muted-foreground">{t('common.loading')}</p>}
@@ -663,7 +671,12 @@ export default function Settings() {
             <div key={tpl.id} className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5">
               <span className="text-xl shrink-0">{tpl.icon}</span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{displayName}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium truncate">{displayName}</p>
+                  {tpl.hasOverride && !isAdmin && (
+                    <span className="shrink-0 text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded px-1 py-0.5">modifié</span>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground truncate">{displaySector}</p>
                 <div className="flex gap-0.5 mt-1">
                   {availableCodes.map(code => (
@@ -674,21 +687,33 @@ export default function Settings() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <Button size="sm" variant="outline" title="Dupliquer"
-                  onClick={() => tplDuplicateMut.mutate(tpl)}
-                  disabled={tplDuplicateMut.isPending}
-                >
-                  <Copy size={12} />
-                </Button>
+                {isAdmin && (
+                  <Button size="sm" variant="outline" title="Dupliquer"
+                    onClick={() => tplDuplicateMut.mutate(tpl)}
+                    disabled={tplDuplicateMut.isPending}
+                  >
+                    <Copy size={12} />
+                  </Button>
+                )}
                 <Button size="sm" variant="outline" title="Modifier" onClick={() => { setTplEditing(tpl); setTplOpen(true) }}>
                   <Pencil size={12} />
                 </Button>
-                <Button size="sm" variant="destructive" title="Supprimer"
-                  onClick={() => { if (confirm(`Supprimer le template "${tpl.name}" ?`)) tplDeleteMut.mutate(tpl.id) }}
-                  disabled={tplDeleteMut.isPending}
-                >
-                  <Trash2 size={12} />
-                </Button>
+                {isAdmin ? (
+                  <Button size="sm" variant="destructive" title="Supprimer"
+                    onClick={() => { if (confirm(`Supprimer le template "${tpl.name}" ?`)) tplDeleteMut.mutate(tpl.id) }}
+                    disabled={tplDeleteMut.isPending}
+                  >
+                    <Trash2 size={12} />
+                  </Button>
+                ) : tpl.hasOverride ? (
+                  <Button size="sm" variant="outline" title="Réinitialiser"
+                    onClick={() => { if (confirm('Réinitialiser ce template aux valeurs par défaut ?')) tplResetMut.mutate(tpl.id) }}
+                    disabled={tplResetMut.isPending}
+                    className="text-amber-600 hover:text-amber-700 border-amber-300"
+                  >
+                    <RefreshCw size={12} />
+                  </Button>
+                ) : null}
               </div>
             </div>
           )})}

@@ -16,7 +16,7 @@ async function getPbxCreds(
   const creds = await pb.collection('pbx_credentials').getOne(pbxId).catch(() => null)
 
   if (!creds) throw new AppError(404, 'PBX introuvable')
-  if (role !== 'admin' && creds['user'] !== userId) throw new AppError(403, 'Accès refusé')
+  if (role !== 'admin' && creds['user'] !== userId && !creds['shared']) throw new AppError(403, 'Accès refusé')
 
   return creds as unknown as PbxCredentials
 }

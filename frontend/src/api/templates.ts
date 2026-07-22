@@ -13,11 +13,12 @@ export interface BotTemplate {
     useCase: string
     sections?: Array<{ key: string; title: string; content: string }>
   }>
+  hasOverride?: boolean
   created?: string
   updated?: string
 }
 
-export type BotTemplateInput = Omit<BotTemplate, 'id' | 'created' | 'updated'>
+export type BotTemplateInput = Omit<BotTemplate, 'id' | 'created' | 'updated' | 'hasOverride'>
 
 export const templatesApi = {
   list: () =>
@@ -31,4 +32,7 @@ export const templatesApi = {
 
   delete: (id: string) =>
     apiClient.delete<void>(`/templates/${id}`),
+
+  resetOverride: (id: string) =>
+    apiClient.delete<{ ok: boolean }>(`/templates/${id}`),
 }

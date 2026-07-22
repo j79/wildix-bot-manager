@@ -10,18 +10,26 @@ type PbxInput = {
   pbx_key?: string
   pbx_host: string
   pbx_local_token?: string
+  shared?: boolean
 }
 
 const pbx = new Hono<{ Variables: AuthVariables }>()
 
-// GET /pbx — tous les PBX (visibles par tout utilisateur authentifié)
+// GET /pbx — PBX de l'utilisateur + PBX partagés
 pbx.get('/', async (c) => {
+  const user = c.get('user')
   const pb = await getAdminPb()
 
+  if (user.role === 'admin') {
+    const records = await pb.collection('pbx_credentials').getFullList({ sort: 'name' })
+    return c.json(records)
+  }
+
+  // Non-admin: ses propres PBX + les PBX partagés
   const records = await pb.collection('pbx_credentials').getFullList({
     sort: 'name',
+    filter: `user = "${user.id}" || shared = true`,
   })
-
   return c.json(records)
 })
 
@@ -38,6 +46,7 @@ pbx.post('/', async (c) => {
   const record = await pb.collection('pbx_credentials').create({
     ...body,
     user: user.id,
+    shared: user.role === 'admin' ? (body.shared ?? false) : false,
   })
 
   return c.json(record, 201)
@@ -55,7 +64,11 @@ pbx.put('/:id', async (c) => {
   if (!existing) throw new AppError(404, 'PBX introuvable')
   if (user.role !== 'admin' && existing['user'] !== user.id) throw new AppError(403, 'Accès refusé')
 
-  const record = await pb.collection('pbx_credentials').update(id, body)
+  const data: Partial<PbxInput> = { ...body }
+  // Seul un admin peut modifier le flag shared
+  if (user.role !== 'admin') delete data.shared
+
+  const record = await pb.collection('pbx_credentials').update(id, data)
   return c.json(record)
 })
 

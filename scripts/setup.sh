@@ -152,3 +152,22 @@ echo "  Frontend      : http://localhost:${FRONTEND_PORT:-80}"
 echo "  PocketBase UI : http://localhost:${PB_PORT:-8090}/_/"
 echo "  API backend   : http://localhost:${BACKEND_PORT:-3000}/health"
 echo
+
+# Collection user_ai_config
+create_collection user_ai_config '{
+  name: user_ai_config,
+  type: base,
+  fields: [
+    {name:user,type:relation,required:true,collectionId:_pb_users_auth_,cascadeDelete:true},
+    {name:provider,type:text,required:true},
+    {name:api_key,type:text},
+    {name:model,type:text},
+    {name:ollama_url,type:text}
+  ],
+  listRule: @request.auth.id = user
+
+# Collection user_ai_config (v0.2.0)
+create_collection "user_ai_config" "{\"name\":\"user_ai_config\",\"type\":\"base\",\"fields\":[{\"name\":\"user\",\"type\":\"relation\",\"required\":true,\"collectionId\":\"_pb_users_auth_\",\"cascadeDelete\":true},{\"name\":\"provider\",\"type\":\"text\",\"required\":true},{\"name\":\"api_key\",\"type\":\"text\"},{\"name\":\"model\",\"type\":\"text\"},{\"name\":\"ollama_url\",\"type\":\"text\"}],\"listRule\":\"@request.auth.id = user || @request.auth.role = \\\"admin\\\"\",\"viewRule\":\"@request.auth.id = user || @request.auth.role = \\\"admin\\\"\",\"createRule\":\"@request.auth.id != \\\"\\\"\",\"updateRule\":\"@request.auth.id = user || @request.auth.role = \\\"admin\\\"\",\"deleteRule\":\"@request.auth.id = user || @request.auth.role = \\\"admin\\\"\"}"
+
+# Collection user_template_overrides (v0.2.0)
+create_collection "user_template_overrides" "{\"name\":\"user_template_overrides\",\"type\":\"base\",\"fields\":[{\"name\":\"user\",\"type\":\"relation\",\"required\":true,\"collectionId\":\"_pb_users_auth_\",\"cascadeDelete\":true},{\"name\":\"template\",\"type\":\"relation\",\"required\":true,\"collectionId\":\"bot_templates\",\"cascadeDelete\":true},{\"name\":\"name\",\"type\":\"text\"},{\"name\":\"icon\",\"type\":\"text\"},{\"name\":\"sector\",\"type\":\"text\"},{\"name\":\"useCase\",\"type\":\"text\"},{\"name\":\"sections\",\"type\":\"json\"},{\"name\":\"translations\",\"type\":\"json\"}],\"listRule\":\"@request.auth.id = user || @request.auth.role = \\\"admin\\\"\",\"viewRule\":\"@request.auth.id = user || @request.auth.role = \\\"admin\\\"\",\"createRule\":\"@request.auth.id != \\\"\\\"\",\"updateRule\":\"@request.auth.id = user || @request.auth.role = \\\"admin\\\"\",\"deleteRule\":\"@request.auth.id = user || @request.auth.role = \\\"admin\\\"\"}"

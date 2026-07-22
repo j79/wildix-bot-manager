@@ -15,6 +15,7 @@ export interface PbxCredential {
   pbx_serial: string
   pbx_host: string
   pbx_local_token: string
+  shared: boolean
   created: string
   updated: string
 }
