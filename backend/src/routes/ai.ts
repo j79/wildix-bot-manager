@@ -770,12 +770,17 @@ ai.put('/config', async (c) => {
     filter: `user = "${user.id}"`,
   }).catch(() => [] as any[])
 
-  // Clé effective : fournie OU depuis le cache key_ de l'utilisateur
+  // Clé effective : fournie OU cache key_ utilisateur OU cache key_ global
   let effectiveKey = body.api_key?.trim() ?? ''
   if (!effectiveKey && body.provider !== 'ollama') {
     const cacheKey = 'key_' + body.provider
-    const cached = userRecords.find((r: any) => r['provider'] === cacheKey)
-    effectiveKey = (cached?.['api_key'] as string) || ''
+    const userCached = userRecords.find((r: any) => r['provider'] === cacheKey)
+    effectiveKey = (userCached?.['api_key'] as string) || ''
+  }
+  if (!effectiveKey && body.provider !== 'ollama') {
+    // Fallback : chercher dans le cache global (ai_config)
+    const globalCached = await getKeyRecord(pb, body.provider)
+    effectiveKey = (globalCached?.['api_key'] as string) || ''
   }
   if (!effectiveKey && body.provider !== 'ollama') {
     throw new AppError(400, 'api_key requis pour ce provider (aucune clé enregistrée)')
