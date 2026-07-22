@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Info } from 'lucide-react'
+import { ChevronRight, Info, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { dialplanApi } from '@/api/bots'
 import type { BotDraft } from '@/types/botCreate'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,13 @@ export function StepRecap({
     enabled: !!draft.pbxId && draft.botType === 'voicebot',
   })
   const selectedDialplan = dialplanData?.dialplans.find(d => d.id === draft.dialplanId)
+
+  // Détecter les éléments non configurés dans le prompt
+  const unconfiguredVars = draft.systemPrompt
+    ? [...new Set([...draft.systemPrompt.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1]))]
+    : []
+  const unconfiguredTools = unconfiguredVars.filter(v => v.startsWith('OUTIL_'))
+  const unconfiguredOther = unconfiguredVars.filter(v => !v.startsWith('OUTIL_'))
 
   return (
     <div className="space-y-6">
@@ -128,6 +135,39 @@ export function StepRecap({
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 space-y-1">
           <p className="font-semibold">Dialplan non configuré</p>
           <p>Aucune entrée dialplan n'a été associée. Après création du bot, configurez une entrée dialplan dans votre PBX Wildix.</p>
+        </div>
+      )}
+
+      {/* Checklist post-création */}
+      {(unconfiguredTools.length > 0 || unconfiguredOther.length > 0) && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+            <p className="text-sm font-semibold text-amber-900">À faire après la création</p>
+          </div>
+          {unconfiguredTools.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-amber-800">Outils & intégrations à configurer dans WILMA :</p>
+              {unconfiguredTools.map(tool => (
+                <div key={tool} className="flex items-center gap-2 text-xs text-amber-700">
+                  <CheckCircle2 size={11} className="text-amber-400 shrink-0" />
+                  <span className="font-mono">{tool}</span>
+                  <span className="text-amber-500">— webhook ou outil natif WILMA</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {unconfiguredOther.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-amber-800">Variables à personnaliser dans le prompt :</p>
+              {unconfiguredOther.map(v => (
+                <div key={v} className="flex items-center gap-2 text-xs text-amber-700">
+                  <CheckCircle2 size={11} className="text-amber-400 shrink-0" />
+                  <span className="font-mono">[[{v}]]</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
