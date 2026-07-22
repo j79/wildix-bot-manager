@@ -27,5 +27,7 @@ Thumbs.db
 .idea/
 *.swp
 
-# Scripts temporaires
-scripts/
+# Scripts de setup
+# scripts/
+# Notes de session
+PROJECT_STATE.md
