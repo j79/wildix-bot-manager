@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   ChevronLeft, Bot, Save, ChevronRight, PhoneCall, PhoneOff, Clock,
-  Sparkles, Plus, Trash2, Wrench, Loader2,
+  Sparkles, Plus, Trash2, Wrench, Loader2, AlertTriangle, Wand2, PenLine,
 } from 'lucide-react'
 import { botsApi, toolsApi, dialplanApi } from '@/api/bots'
 import { aiApi } from '@/api/ai'
@@ -59,10 +59,10 @@ function apiToEmbedded(tools: VoiceBotEmbeddedTool[] | undefined): EmbeddedDraft
 function buildEmbedded(d: EmbeddedDraft) {
   const result: Array<{ type: string; name: string; parameters?: Record<string, string> }> = []
   for (const r of d.transfer) {
-    if (!r.extension && !r.context) continue
+    if (!r.extension) continue  // Wildix requiert une extension pour tout TRANSFER
     result.push({ type: 'TRANSFER', name: r.name || 'Transfer', parameters: {
-      ...(r.extension && { extension: r.extension }),
-      ...(r.context && { context: r.context }),
+      extension:                    r.extension,
+      ...(r.context     && { context:     r.context }),
       ...(r.description && { description: r.description }),
     }})
   }
@@ -163,6 +163,11 @@ export default function BotEdit() {
   const [embedded, setEmbedded]   = useState<EmbeddedDraft>({ transfer: [], hangup: { enabled: true, description: "Fin d'appel", context: '' }, wait: { enabled: false, description: 'Mise en attente', context: '' } })
   const [wimDraft, setWimDraft]   = useState<WimToolDraft[]>([])
   const [suggesting, setSuggesting] = useState(false)
+  const [toolsSnapshot, setToolsSnapshot] = useState<string>('')
+  const [toolsChanged, setToolsChanged] = useState(false)
+  const [revising, setRevising] = useState(false)
+  const [revisionMode, setRevisionMode] = useState<'analysis' | 'auto' | null>(null)
+  const [revisionResult, setRevisionResult] = useState<string>('')
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: bot, isLoading, error } = useQuery({
@@ -192,7 +197,9 @@ export default function BotEdit() {
       maxCallDuration:      v.pipeline?.maximumDuration ?? 300,
     })
     if (isVoice) {
-      setEmbedded(apiToEmbedded(v.endpoint?.llm?.embeddedTools as VoiceBotEmbeddedTool[] | undefined))
+      const emb = apiToEmbedded(v.endpoint?.llm?.embeddedTools as VoiceBotEmbeddedTool[] | undefined)
+      setEmbedded(emb)
+      setToolsSnapshot(JSON.stringify(emb))
       setWimDraft(
         (v.capabilities ?? [])
           .filter(c => !!c.tool?.id)
@@ -205,6 +212,44 @@ export default function BotEdit() {
       )
     }
   }, [bot, isVoice])
+
+  // ── Detect tool changes ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!toolsSnapshot) return
+    const changed = JSON.stringify(embedded) !== toolsSnapshot
+    setToolsChanged(changed)
+    if (!changed) { setRevisionMode(null); setRevisionResult('') }
+  }, [embedded, toolsSnapshot])
+
+  // ── Revision IA du prompt ──────────────────────────────────────────────────
+  async function handleRevise(mode: 'analysis' | 'auto') {
+    setRevising(true)
+    setRevisionMode(mode)
+    setRevisionResult('')
+    try {
+      const toolsBefore = JSON.parse(toolsSnapshot)
+      const toolsAfter  = embedded
+      const prompt = mode === 'analysis'
+        ? `Analyse le prompt système ci-dessous et les changements d'outils apportés. Liste précisément les parties du prompt à modifier, ajouter ou supprimer pour refléter les nouveaux outils. Sois concis et opérationnel.\n\nOutils AVANT :\n${JSON.stringify(toolsBefore, null, 2)}\n\nOutils APRÈS :\n${JSON.stringify(toolsAfter, null, 2)}\n\nPrompt actuel :\n${form.systemPrompt}`
+        : `Révise le prompt système ci-dessous pour le mettre en cohérence avec les nouveaux outils configurés. Retourne UNIQUEMENT le prompt révisé, sans explication, en conservant exactement la même structure en sections.\n\nOutils AVANT :\n${JSON.stringify(toolsBefore, null, 2)}\n\nOutils APRÈS :\n${JSON.stringify(toolsAfter, null, 2)}\n\nPrompt à réviser :\n${form.systemPrompt}`
+
+      let result = ''
+      await aiApi.chatStream(
+        [{ role: 'user', content: prompt }],
+        'Tu es un expert en configuration de VoiceBots Wildix WILMA. Réponds en français.',
+        chunk => { result += chunk; setRevisionResult(result) }
+      )
+      if (mode === 'auto') {
+        set('systemPrompt', result.trim())
+        setToolsSnapshot(JSON.stringify(embedded))
+        setToolsChanged(false)
+        setRevisionMode(null)
+        setRevisionResult('')
+        toast.success('Prompt mis à jour automatiquement')
+      }
+    } catch { toast.error('Erreur lors de la révision') }
+    finally { setRevising(false) }
+  }
 
   // ── AI suggest tools ───────────────────────────────────────────────────────
   async function suggest() {
@@ -254,10 +299,10 @@ export default function BotEdit() {
         }))
         return botsApi.update(id!, pbxId, {
           name:        form.name.trim(),
-          description: form.description.trim() || undefined,
+          description: form.description.trim() || null,
           enabled:     form.enabled,
-          message:     form.welcomeMessage.trim() || undefined,
-          endpoint:    { llm: { prompt: form.systemPrompt.trim(), ...(embTools.length > 0 && { embeddedTools: embTools }) } },
+          message:     form.welcomeMessage.trim() || null,
+          endpoint:    { llm: { prompt: form.systemPrompt.trim(), embeddedTools: embTools } },
           pipeline:    { interuptionsEnabled: form.interruptionsEnabled, silenceTimeout: form.silenceTimeout, maximumDuration: form.maxCallDuration },
           ...(capabilities.length > 0 && { capabilities }),
         } as Partial<VoiceBot>, 'voicebot')
@@ -392,6 +437,9 @@ export default function BotEdit() {
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Extension / Destination *</label>
                   <DialplanPicker pbxId={pbxId} value={rule.extension} onSelect={v => updateRule(rule.id, 'extension', v)} />
+                  {!rule.extension && (
+                    <p className="text-[11px] text-amber-600">⚠ Extension requise — cette règle ne sera pas enregistrée sans destination.</p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Contexte — instructions LLM</label>

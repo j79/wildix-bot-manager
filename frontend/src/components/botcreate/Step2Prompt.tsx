@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ChevronLeft, Loader2, Check, Pencil } from 'lucide-react'
+import { ChevronLeft, Loader2, Check, Pencil, Eye, X, Sparkles } from 'lucide-react'
 import { templatesApi, type BotTemplate } from '@/api/templates'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import PromptGenerator from '@/components/PromptGenerator'
 import { TemplateModal } from '@/components/TemplateModal'
 import { SectionEditor, EMPTY_SECTIONS } from '@/components/botcreate/SectionEditor'
 import { LANG_MAP } from '@/components/botcreate/helpers'
+import { Button } from '@/components/ui/button'
 import type { BotDraft, CreateMode, Section } from '@/types/botCreate'
 
 const LANG_FLAGS: Record<string, string> = {
@@ -33,6 +34,7 @@ export function Step2({
 }: Props) {
   const [selectedTemplate, setSelectedTemplate] = useState<BotTemplate | null>(null)
   const [editingTemplate, setEditingTemplate]   = useState<BotTemplate | null>(null)
+  const [previewTemplate, setPreviewTemplate]   = useState<BotTemplate | null>(null)
   const { i18n } = useTranslation()
   const langCode    = i18n.language?.slice(0, 2) ?? 'fr'
   const currentLang = LANG_MAP[langCode] ?? 'Français'
@@ -196,7 +198,7 @@ export function Step2({
             )
             return (
               <div key={t.id} className="group relative rounded-lg border border-border hover:border-primary/50 bg-card hover:bg-accent transition-all">
-                <button type="button" onClick={() => applyTemplate(t)} className="flex items-start gap-2.5 p-3 text-left w-full">
+                <button type="button" onClick={() => setPreviewTemplate(t)} className="flex items-start gap-2.5 p-3 text-left w-full">
                   <span className="text-2xl shrink-0 leading-none mt-0.5">{t.icon}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold leading-tight">{displayName}</p>
@@ -231,6 +233,54 @@ export function Step2({
       <Dialog open={!!editingTemplate} onOpenChange={v => { if (!v) setEditingTemplate(null) }}>
         <DialogContent title={editingTemplate ? `Modifier — ${editingTemplate.name}` : ''}>
           <TemplateModal editing={editingTemplate} onClose={() => setEditingTemplate(null)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview template avant application */}
+      <Dialog open={!!previewTemplate} onOpenChange={v => { if (!v) setPreviewTemplate(null) }}>
+        <DialogContent title={previewTemplate ? `${previewTemplate.icon} ${previewTemplate.translations?.[langCode]?.name ?? previewTemplate.name}` : ''}>
+          {previewTemplate && (
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-blue-50 border-blue-200 p-3">
+                <p className="text-xs font-semibold text-blue-800 uppercase tracking-widest mb-1.5">Ce que fait ce bot</p>
+                <p className="text-sm text-blue-900 leading-relaxed">
+                  {previewTemplate.translations?.[langCode]?.useCase ?? previewTemplate.useCase}
+                </p>
+              </div>
+              {(() => {
+                const prompt = (previewTemplate.translations?.[langCode]?.sections ?? previewTemplate.sections)
+                  .map(s => s.content).join(' ')
+                const tools = [...new Set(
+                  [...prompt.matchAll(/\[\[OUTIL_([^\]]+)\]\]/g)].map(m => m[1])
+                )]
+                return tools.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-1">
+                      <Sparkles size={11} /> Outils & intégrations requis
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {tools.map(tool => (
+                        <span key={tool} className="text-[11px] font-mono bg-muted rounded px-2 py-0.5 text-muted-foreground">
+                          {tool.replace(/_/g, ' ').toLowerCase()}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null
+              })()}
+              <div className="flex gap-2 pt-1 border-t justify-end">
+                <button
+                  onClick={() => setPreviewTemplate(null)}
+                  className="text-sm text-muted-foreground hover:text-foreground px-3 py-1.5"
+                >
+                  Annuler
+                </button>
+                <Button onClick={() => { applyTemplate(previewTemplate); setPreviewTemplate(null) }}>
+                  Utiliser ce template
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
